@@ -397,7 +397,7 @@ func main() {
 
 	suffix := ""
 	if _, ok := os.LookupEnv("BitBarDarkMode"); ok {
-		suffix = " | font-Menlo trim=false"
+		suffix = " | font=Menlo trim=false"
 	}
 	fmt.Println(" Total" + suffix)
 	// Print each project per day

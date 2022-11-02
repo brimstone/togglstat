@@ -33,3 +33,5 @@ Automagic upgrade available with the `upgrade` subcommand:
 ```
 togglstat upgrade
 ```
+
+Pairs well with [xbar](https://xbarapp.com/)
