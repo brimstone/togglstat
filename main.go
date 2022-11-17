@@ -27,6 +27,20 @@ type Config struct {
 	RenameProjects map[string]string
 }
 
+type payperiod struct {
+	Start     time.Time
+	Duration  time.Duration
+	Target    time.Duration
+	Remaining time.Duration
+}
+
+type TimeCalculation struct {
+	DayWorked time.Duration
+	Remaining time.Duration
+	Payperiod payperiod
+	Days      []map[string]time.Duration
+}
+
 var (
 	config  Config
 	log     = logger.New()
@@ -156,7 +170,7 @@ func getPayperiod(now time.Time) (time.Time, time.Time, error) {
 			now.Location())
 		end := now.AddDate(0, 0, 17)
 		payperiodEnd, err = time.ParseInLocation("2006 January 02",
-			fmt.Sprintf("%d %s 16", end.Year(), end.Month()),
+			fmt.Sprintf("%d %s 01", end.Year(), end.Month()),
 			now.Location())
 	}
 	if err != nil {
@@ -214,43 +228,7 @@ func skipProject(project string) bool {
 	return false
 }
 
-func main() {
-	err := loadConfig()
-	if err != nil {
-		panic(err)
-	}
-
-	// Handle any command line flags
-	flag.StringVar(&config.APIToken, "token", config.APIToken, "API Token for Toggl")
-	flag.Parse()
-
-	switch flag.Arg(0) {
-	case "upgrade":
-		fmt.Println("Checking and applying upgrade")
-		v := semver.MustParse(version)
-		latest, err := selfupdate.UpdateSelf(v, "brimstone/togglstat")
-		if err != nil {
-			log.Println("Binary update failed:", err)
-			os.Exit(1)
-		}
-		if latest.Version.Equals(v) {
-			// latest version is the same as current version. It means current binary is up to date.
-			log.Println("Current binary is the latest version", version)
-		} else {
-			log.Println("Successfully updated to version", latest.Version)
-			log.Println("Release note:\n", latest.ReleaseNotes)
-		}
-		return
-	case "version":
-		fmt.Printf("togglstat version %s\n", version)
-		return
-	}
-
-	if config.APIToken == "" {
-		// save the config so the user can update it there if they'd like instead
-		saveConfig()
-		panic(fmt.Errorf("must have an apitoken"))
-	}
+func calculateTime() (TimeCalculation, error) {
 
 	payperiodStart, payperiodEnd, err := getPayperiod(now)
 
@@ -262,13 +240,13 @@ func main() {
 
 	entries, err := getEntriesSince(payperiodStart, payperiodEnd)
 	if err != nil {
-		panic(err)
+		return TimeCalculation{}, err
 	}
 
 	payperiodDays := payperiodEnd.Sub(payperiodStart) / (time.Hour * 24)
 	var (
 		payperiodDuration time.Duration
-		today             time.Duration
+		dayworked         time.Duration
 		payperiodTarget   time.Duration
 		days              = make([]map[string]time.Duration, payperiodDays)
 	)
@@ -312,7 +290,7 @@ func main() {
 			}
 			payperiodDuration += d
 			if s.Year() == now.Year() && s.Month() == now.Month() && s.Day() == now.Day() {
-				today += d
+				dayworked += d
 			}
 			if days[i] == nil {
 				days[i] = make(map[string]time.Duration)
@@ -330,46 +308,106 @@ func main() {
 		}
 	}
 
+	remaining := time.Hour*8 - dayworked
+	payperiodRemaining := payperiodTarget - payperiodDuration
+
+	return TimeCalculation{
+		DayWorked: dayworked,
+		Remaining: remaining,
+		Payperiod: payperiod{
+			Start:     payperiodStart,
+			Duration:  payperiodDuration,
+			Target:    payperiodTarget,
+			Remaining: payperiodRemaining,
+		},
+		Days: days,
+	}, nil
+}
+
+func main() {
+	err := loadConfig()
+	if err != nil {
+		panic(err)
+	}
+
+	// Handle any command line flags
+	flag.StringVar(&config.APIToken, "token", config.APIToken, "API Token for Toggl")
+	flag.Parse()
+
+	switch flag.Arg(0) {
+	case "upgrade":
+		fmt.Println("Checking and applying upgrade")
+		v := semver.MustParse(version)
+		latest, err := selfupdate.UpdateSelf(v, "brimstone/togglstat")
+		if err != nil {
+			log.Println("Binary update failed:", err)
+			os.Exit(1)
+		}
+		if latest.Version.Equals(v) {
+			// latest version is the same as current version. It means current binary is up to date.
+			log.Println("Current binary is the latest version", version)
+		} else {
+			log.Println("Successfully updated to version", latest.Version)
+			log.Println("Release note:\n", latest.ReleaseNotes)
+		}
+		return
+	case "version":
+		fmt.Printf("togglstat version %s\n", version)
+		return
+	case "serve":
+		serve()
+		return
+	}
+
+	if config.APIToken == "" {
+		// save the config so the user can update it there if they'd like instead
+		saveConfig()
+		panic(fmt.Errorf("must have an apitoken"))
+	}
+
+	tc, err := calculateTime()
+
+	if err != nil {
+		panic(err)
+	}
+
 	// TODO
 	// if time is before ETA to 8 hours: show ETA in red
 	// (not useful?) if time is before ETA to average to payperiod: show ETA in yellow
 	// if time is before ETA to payperiod: show ETA in green
 	// if time is after ETA to payperiod: show relative time in black
 
-	remaining := time.Hour*8 - today
-	payperiodRemaining := payperiodTarget - payperiodDuration
-
-	if remaining > 0 {
-		fmt.Printf("\x1b[1;31m%s\x1b[0m", now.Add(remaining).Format("15:04"))
+	if tc.Remaining > 0 {
+		fmt.Printf("\x1b[1;31m%s\x1b[0m", now.Add(tc.Remaining).Format("15:04"))
 	} else {
-		fmt.Printf("+%s", -1*remaining.Round(time.Minute))
+		fmt.Printf("+%s", -1*tc.Remaining.Round(time.Minute))
 	}
-	if payperiodRemaining > 0 {
-		fmt.Printf("-\x1b[1;31m%s\x1b[0m\n", now.Add(payperiodRemaining).Format("15:04"))
+	if tc.Payperiod.Remaining > 0 {
+		fmt.Printf("-\x1b[1;31m%s\x1b[0m\n", now.Add(tc.Payperiod.Remaining).Format("15:04"))
 	} else {
-		fmt.Printf("+%s\n", -1*payperiodRemaining.Round(time.Minute))
+		fmt.Printf("+%s\n", -1*tc.Payperiod.Remaining.Round(time.Minute))
 	}
 
 	fmt.Printf("---\n")
-	fmt.Printf("Day Duration: %s\n", formatDuration(today))
-	fmt.Printf("Day Remaining: %s\n", formatDuration(remaining))
-	if remaining > 0 {
-		fmt.Printf("Day ETA: %s\n", now.Add(remaining).Format("15:04"))
+	fmt.Printf("Day Duration: %s\n", formatDuration(tc.DayWorked))
+	fmt.Printf("Day Remaining: %s\n", formatDuration(tc.Remaining))
+	if tc.Remaining > 0 {
+		fmt.Printf("Day ETA: %s\n", now.Add(tc.Remaining).Format("15:04"))
 	} else {
-		fmt.Printf("Day Overage: +%s\n", -1*remaining.Round(time.Minute))
+		fmt.Printf("Day Overage: +%s\n", -1*tc.Remaining.Round(time.Minute))
 	}
-	fmt.Printf("Payperiod Target: %s\n", payperiodTarget)
-	fmt.Printf("Payperiod Duration: %s\n", formatDuration(payperiodDuration))
-	fmt.Printf("Payperiod Remaining: %s\n", formatDuration(payperiodRemaining))
-	if payperiodRemaining > 0 {
-		fmt.Printf("Payperiod ETA: %s\n", now.Add(payperiodTarget-payperiodDuration).Format("15:04"))
+	fmt.Printf("Payperiod Target: %s\n", tc.Payperiod.Target)
+	fmt.Printf("Payperiod Duration: %s\n", formatDuration(tc.Payperiod.Duration))
+	fmt.Printf("Payperiod Remaining: %s\n", formatDuration(tc.Payperiod.Remaining))
+	if tc.Payperiod.Remaining > 0 {
+		fmt.Printf("Payperiod ETA: %s\n", now.Add(tc.Payperiod.Target-tc.Payperiod.Duration).Format("15:04"))
 	} else {
-		fmt.Printf("Payperiod Overage: +%s\n", -1*payperiodRemaining.Round(time.Minute))
+		fmt.Printf("Payperiod Overage: +%s\n", -1*tc.Payperiod.Remaining.Round(time.Minute))
 	}
 
 	// Figure all of the projects into sorted slice
 	projectsMap := make(map[string]bool)
-	for _, d := range days {
+	for _, d := range tc.Days {
 		for p := range d {
 			projectsMap[p] = true
 		}
@@ -386,8 +424,8 @@ func main() {
 
 	// Display header row
 	fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", "")
-	for i := range days {
-		day := payperiodStart.AddDate(0, 0, i)
+	for i := range tc.Days {
+		day := tc.Payperiod.Start.AddDate(0, 0, i)
 		if day.Weekday() == time.Sunday || day.Weekday() == time.Saturday {
 			fmt.Printf(" \x1b[3m%s\x1b[0m", day.Format("Jan 02"))
 		} else {
@@ -404,8 +442,8 @@ func main() {
 	for _, p := range projects {
 		fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", p)
 		var projectTotal float64
-		for i, d := range days {
-			day := payperiodStart.AddDate(0, 0, i)
+		for i, d := range tc.Days {
+			day := tc.Payperiod.Start.AddDate(0, 0, i)
 			r := d[p].Round(time.Minute * 15).Hours()
 			w := strconv.FormatInt(int64(len(day.Format("Jan 02"))), 10)
 			if r > 0 {
@@ -420,9 +458,9 @@ func main() {
 	// Print footer, the totals per day per project
 	fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", "Total")
 	var payperiodTotal float64
-	for i, d := range days {
+	for i, d := range tc.Days {
 		var projectTotal float64
-		day := payperiodStart.AddDate(0, 0, i)
+		day := tc.Payperiod.Start.AddDate(0, 0, i)
 		for _, p := range projects {
 			r := d[p].Round(time.Minute * 15).Hours()
 			projectTotal += r
