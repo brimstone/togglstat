@@ -10,6 +10,7 @@ import (
 func serve() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		timeValue := ""
+		now = time.Now()
 		tc, err := calculateTime()
 		if err != nil {
 			fmt.Fprintf(w, "Error loading time")
