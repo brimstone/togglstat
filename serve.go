@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -37,5 +38,12 @@ func serve() {
 
 	})
 
-	http.ListenAndServe(":8080", nil)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "80"
+	}
+	log.Info("Ready to serve",
+		log.Field("port", port),
+	)
+	http.ListenAndServe(":"+port, nil)
 }
