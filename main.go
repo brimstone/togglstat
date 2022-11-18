@@ -87,32 +87,31 @@ func getCurrent() (TimeEntry, error) {
 }
 
 func loadConfig() error {
-
+	configFile := ""
 	// Legacy config location
 	user, err := user.Current()
-	if err != nil {
-		return err
-	}
-	configFile := user.HomeDir + "/.togglstat.yaml"
-	if _, err = os.Stat(configFile); err == nil {
-		// Load the old config file
-		c, err := ioutil.ReadFile(configFile)
-		if err != nil {
-			return err
-		}
-		err = yaml.Unmarshal(c, &config)
-		if err != nil {
-			return err
-		}
+	if err == nil {
+		configFile = user.HomeDir + "/.togglstat.yaml"
+		if _, err = os.Stat(configFile); err == nil {
+			// Load the old config file
+			c, err := ioutil.ReadFile(configFile)
+			if err != nil {
+				return err
+			}
+			err = yaml.Unmarshal(c, &config)
+			if err != nil {
+				return err
+			}
 
-		// save it to the new location
-		err = saveConfig()
-		if err != nil {
-			return err
+			// save it to the new location
+			err = saveConfig()
+			if err != nil {
+				return err
+			}
+			// remove the old location
+			os.Remove(user.HomeDir + "/.togglstat.yaml")
+			return nil
 		}
-		// remove the old location
-		os.Remove(user.HomeDir + "/.togglstat.yaml")
-		return nil
 	}
 
 	// Current config location
