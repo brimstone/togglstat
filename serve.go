@@ -18,7 +18,7 @@ func serve() {
 		if tc.Payperiod.Remaining > 0 {
 			timeValue = now.Add(tc.Payperiod.Remaining).Format("15:04")
 		} else {
-			timeValue = "+" + string(-1*tc.Payperiod.Remaining.Round(time.Minute))
+			timeValue = fmt.Sprintf("+%s", -1*tc.Payperiod.Remaining.Round(time.Minute))
 		}
 
 		fmt.Fprintf(w, `<html>
