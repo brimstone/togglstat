@@ -17,4 +17,4 @@ COPY --from=builder /app /togglstat
 COPY --from=cert /ca.pem /etc/ssl/certs/ca.crt
 COPY --from=tzdata /usr/share/zoneinfo /usr/share/zoneinfo
 ENV LOG_LEVEL=INFO
-ENTRYPOINT /togglstat
+ENTRYPOINT ["/togglstat"]
