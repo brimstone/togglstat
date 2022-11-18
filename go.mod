@@ -3,6 +3,7 @@ module github.com/brimstone/togglstat
 go 1.17
 
 require (
+	github.com/adrg/xdg v0.4.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/brimstone/logger v0.0.0-20210414185108-9babd7891711
 	github.com/go-yaml/yaml v2.1.0+incompatible
