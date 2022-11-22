@@ -23,20 +23,20 @@ func serve() {
 		}
 
 		fmt.Fprintf(w, `<html>
-		<title>Time</title>
-		<style>
-		body {
-			display: flex;
-			width: 100%%;
-			height: 100%%;
-			margin: auto;
-			align-items:center;
-			justify-content:center;
-			text-align: center;
-		}
-		</style>
-		<body><h1>%s</h1>`, timeValue)
-
+<title>Time</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body {
+display: flex;
+width: 100%%;
+height: 100%%;
+margin: auto;
+align-items:center;
+justify-content:center;
+text-align: center;
+}
+</style>
+<body><h1>%s</h1>`, timeValue)
 	})
 
 	port := os.Getenv("PORT")
