@@ -13,18 +13,19 @@ func serve() {
 		now = time.Now()
 		tc, err := calculateTime()
 		if err != nil {
-			fmt.Fprintf(w, "Error loading time")
-			return
-		}
-		if tc.Payperiod.Remaining > 0 {
-			timeValue = now.Add(tc.Payperiod.Remaining).Format("15:04")
+			timeValue = "🤷"
 		} else {
-			timeValue = fmt.Sprintf("+%s", -1*tc.Payperiod.Remaining.Round(time.Minute))
+			if tc.Payperiod.Remaining > 0 {
+				timeValue = now.Add(tc.Payperiod.Remaining).Format("15:04")
+			} else {
+				timeValue = fmt.Sprintf("+%s", -1*tc.Payperiod.Remaining.Round(time.Minute))
+			}
 		}
 
 		fmt.Fprintf(w, `<html>
 <title>Time</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="600">
 <style>
 body {
 display: flex;
