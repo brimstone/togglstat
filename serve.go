@@ -10,8 +10,8 @@ import (
 func serve() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		timeValue := ""
-		now = time.Now()
-		tc, err := calculateTime()
+		now := time.Now()
+		tc, err := calculateTime(now)
 		if err != nil {
 			timeValue = "🤷"
 		} else {

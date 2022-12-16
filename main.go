@@ -45,7 +45,6 @@ type TimeCalculation struct {
 var (
 	config  Config
 	log     = logger.New()
-	now     = time.Now()
 	version = "0.0.0"
 )
 
@@ -215,7 +214,7 @@ func getEntriesSince(start time.Time, end time.Time) ([]TimeEntry, error) {
 	err := get("time_entries?start_date="+startFormat+"&end_date="+endFormat, &response)
 	for _, e := range response {
 		if e.Pid == 0 { // TODO handle this a bit better, ignore or delete the entry?
-			return nil, fmt.Errorf("Entry is missing a project %s", e.Start.In(now.Location()))
+			return nil, fmt.Errorf("Entry is missing a project %s", e.Start.In(start.Location()))
 		}
 		if _, ok := config.Projects[e.Pid]; !ok {
 			err = loadProject(e.Pid)
@@ -256,7 +255,7 @@ func skipProject(project string) bool {
 	return false
 }
 
-func calculateTime() (TimeCalculation, error) {
+func calculateTime(now time.Time) (TimeCalculation, error) {
 
 	payperiodStart, payperiodEnd, err := getPayperiod(now)
 
@@ -358,8 +357,14 @@ func main() {
 		panic(err)
 	}
 
+	var (
+		cliNow string
+		now    time.Time
+	)
+
 	// Handle any command line flags
 	flag.StringVar(&config.APIToken, "token", config.APIToken, "API Token for Toggl")
+	flag.StringVar(&cliNow, "now", cliNow, "Show timecard in perspective of this time instead of the current time")
 	flag.Parse()
 
 	switch flag.Arg(0) {
@@ -393,7 +398,12 @@ func main() {
 		panic(fmt.Errorf("must have an apitoken"))
 	}
 
-	tc, err := calculateTime()
+	if cliNow == "" {
+		now = time.Now()
+	} else {
+		now, err = time.ParseInLocation("2006-01-02", cliNow, time.Now().Location())
+	}
+	tc, err := calculateTime(now)
 
 	if err != nil {
 		panic(err)
