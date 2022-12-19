@@ -313,7 +313,7 @@ func calculateTime(now time.Time) (TimeCalculation, error) {
 			}
 			d := time.Duration(e.Duration) * time.Second
 			if d < 0 {
-				d = now.Sub(e.At)
+				d = time.Now().Sub(e.At)
 			}
 			payperiodDuration += d
 			if s.Year() == now.Year() && s.Month() == now.Month() && s.Day() == now.Day() {
