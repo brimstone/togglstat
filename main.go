@@ -270,18 +270,18 @@ func calculateTime(now time.Time) (TimeCalculation, error) {
 		return TimeCalculation{}, err
 	}
 
-	payperiodDays := payperiodEnd.Sub(payperiodStart) / (time.Hour * 24)
+	payperiodDays := payperiodEnd.YearDay() - payperiodStart.YearDay()
 	var (
 		payperiodDuration time.Duration
 		dayworked         time.Duration
 		payperiodTarget   time.Duration
 		days              = make([]map[string]time.Duration, payperiodDays)
 	)
-	for i := 0; i < int(payperiodEnd.Sub(payperiodStart)/(time.Hour*24)); i++ {
+	for i := 0; i < payperiodDays; i++ {
 		log.Debug("Day",
 			log.Field("i", i),
+			log.Field("payperiodDays", payperiodDays),
 		)
-		// TODO had to add an extra hour here during the payperiod with the fall daylight savings
 		day := payperiodStart.AddDate(0, 0, i)
 		if now.Before(day) {
 			break
