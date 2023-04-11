@@ -358,13 +358,15 @@ func main() {
 	}
 
 	var (
-		cliNow string
-		now    time.Time
+		cliNow  string
+		now     time.Time
+		showPTO bool
 	)
 
 	// Handle any command line flags
 	flag.StringVar(&config.APIToken, "token", config.APIToken, "API Token for Toggl")
 	flag.StringVar(&cliNow, "now", cliNow, "Show timecard in perspective of this time instead of the current time")
+	flag.BoolVar(&showPTO, "pto", showPTO, "Show PTO above the bottom line")
 	flag.Parse()
 
 	switch flag.Arg(0) {
@@ -494,19 +496,39 @@ func main() {
 		fmt.Printf(" %5.2f%s\n", projectTotal, suffix)
 	}
 	// Print footer, the totals per day per project
-	fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", "Total")
 	var payperiodTotal float64
+	projectTotal := make([]float64, len(tc.Days))
 	for i, d := range tc.Days {
-		var projectTotal float64
-		day := tc.Payperiod.Start.AddDate(0, 0, i)
 		for _, p := range projects {
 			r := d[p].Round(time.Minute * 15).Hours()
-			projectTotal += r
+			projectTotal[i] += r
 			payperiodTotal += r
 		}
+	}
+	if showPTO {
+		fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", "PTO")
+		var ptoTotal float64
+		for i, _ := range tc.Days {
+			day := tc.Payperiod.Start.AddDate(0, 0, i)
+			w := strconv.FormatInt(int64(len(day.Format("Jan 02"))), 10)
+			if projectTotal[i] < 8 && projectTotal[i] > 0 {
+				pto := 8 - projectTotal[i]
+				fmt.Printf(colorRange(8, " %"+w+".2f", pto), pto)
+				projectTotal[i] += pto
+				ptoTotal += pto
+			} else {
+				fmt.Printf(" %"+w+"s", "")
+			}
+		}
+		fmt.Printf(" %5.2f%s\n", ptoTotal, suffix)
+	}
+
+	fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", "Total")
+	for i, _ := range tc.Days {
+		day := tc.Payperiod.Start.AddDate(0, 0, i)
 		w := strconv.FormatInt(int64(len(day.Format("Jan 02"))), 10)
-		if projectTotal > 0 {
-			fmt.Printf(colorRange(8, " %"+w+".2f", projectTotal), projectTotal)
+		if projectTotal[i] > 0 {
+			fmt.Printf(colorRange(8, " %"+w+".2f", projectTotal[i]), projectTotal[i])
 		} else {
 			fmt.Printf(" %"+w+"s", "")
 		}
