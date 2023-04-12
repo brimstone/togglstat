@@ -496,39 +496,60 @@ func main() {
 		fmt.Printf(" %5.2f%s\n", projectTotal, suffix)
 	}
 	// Print footer, the totals per day per project
-	var payperiodTotal float64
-	projectTotal := make([]float64, len(tc.Days))
+	projectTotals := make([]float64, len(tc.Days))
 	for i, d := range tc.Days {
 		for _, p := range projects {
 			r := d[p].Round(time.Minute * 15).Hours()
-			projectTotal[i] += r
-			payperiodTotal += r
+			projectTotals[i] += r
 		}
 	}
+	ptoTotals := make([]float64, len(tc.Days))
 	if showPTO {
+		// First, figure out the PTOs
+		for i := range tc.Days {
+			if projectTotals[i] < 8 && projectTotals[i] > 0 {
+				ptoTotals[i] = 8 - projectTotals[i]
+			} else if projectTotals[i] > 8 {
+				// Since we worked over this day, find time to comp back from previous days
+				overage := projectTotals[i] - 8
+				for j := range tc.Days {
+					if ptoTotals[j] == 0 {
+						continue
+					}
+					if ptoTotals[j] > overage {
+						ptoTotals[j] -= overage
+						break
+					}
+					overage -= ptoTotals[j]
+					ptoTotals[j] = 0
+				}
+			}
+		}
+		// Second, print them
 		fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", "PTO")
 		var ptoTotal float64
-		for i, _ := range tc.Days {
+		for i := range tc.Days {
 			day := tc.Payperiod.Start.AddDate(0, 0, i)
 			w := strconv.FormatInt(int64(len(day.Format("Jan 02"))), 10)
-			if projectTotal[i] < 8 && projectTotal[i] > 0 {
-				pto := 8 - projectTotal[i]
-				fmt.Printf(colorRange(8, " %"+w+".2f", pto), pto)
-				projectTotal[i] += pto
-				ptoTotal += pto
+			if ptoTotals[i] > 0 {
+				fmt.Printf(colorRange(8, " %"+w+".2f", ptoTotals[i]), ptoTotals[i])
+				ptoTotal += ptoTotals[i]
 			} else {
 				fmt.Printf(" %"+w+"s", "")
 			}
 		}
 		fmt.Printf(" %5.2f%s\n", ptoTotal, suffix)
 	}
-
+	// Show totals
 	fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", "Total")
-	for i, _ := range tc.Days {
+	var payperiodTotal float64
+	for i := range tc.Days {
 		day := tc.Payperiod.Start.AddDate(0, 0, i)
 		w := strconv.FormatInt(int64(len(day.Format("Jan 02"))), 10)
-		if projectTotal[i] > 0 {
-			fmt.Printf(colorRange(8, " %"+w+".2f", projectTotal[i]), projectTotal[i])
+		if projectTotals[i] > 0 || ptoTotals[i] > 0 {
+			dayTotal := projectTotals[i] + ptoTotals[i]
+			payperiodTotal += dayTotal
+			fmt.Printf(colorRange(8, " %"+w+".2f", dayTotal), dayTotal)
 		} else {
 			fmt.Printf(" %"+w+"s", "")
 		}
