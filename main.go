@@ -36,10 +36,11 @@ type payperiod struct {
 }
 
 type TimeCalculation struct {
-	DayWorked time.Duration
-	Remaining time.Duration
-	Payperiod payperiod
-	Days      []map[string]time.Duration
+	DayWorked    time.Duration
+	Remaining    time.Duration
+	Payperiod    payperiod
+	Days         []map[string]time.Duration
+	ExpectedDays []time.Duration
 }
 
 var (
@@ -276,6 +277,7 @@ func calculateTime(now time.Time) (TimeCalculation, error) {
 		dayworked         time.Duration
 		payperiodTarget   time.Duration
 		days              = make([]map[string]time.Duration, payperiodDays)
+		expectedDays      = make([]time.Duration, payperiodDays)
 	)
 	for i := 0; i < payperiodDays; i++ {
 		log.Debug("Day",
@@ -293,6 +295,7 @@ func calculateTime(now time.Time) (TimeCalculation, error) {
 				log.Field("wd", wd),
 			)
 			payperiodTarget += time.Hour * 8
+			expectedDays[i] = time.Hour * 8
 		}
 
 		log.Debug("Entries",
@@ -347,7 +350,8 @@ func calculateTime(now time.Time) (TimeCalculation, error) {
 			Target:    payperiodTarget,
 			Remaining: payperiodRemaining,
 		},
-		Days: days,
+		Days:         days,
+		ExpectedDays: expectedDays,
 	}, nil
 }
 
@@ -464,12 +468,14 @@ func main() {
 
 	// Display header row
 	fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", "")
+	weekdays := make([]bool, len(tc.Days))
 	for i := range tc.Days {
 		day := tc.Payperiod.Start.AddDate(0, 0, i)
 		if day.Weekday() == time.Sunday || day.Weekday() == time.Saturday {
 			fmt.Printf(" \x1b[3m%s\x1b[0m", day.Format("Jan 02"))
 		} else {
 			fmt.Printf(" %s", day.Format("Jan 02"))
+			weekdays[i] = true
 		}
 	}
 
@@ -505,13 +511,18 @@ func main() {
 	}
 	ptoTotals := make([]float64, len(tc.Days))
 	if showPTO {
+		var overage float64
 		// First, figure out the PTOs
 		for i := range tc.Days {
-			if projectTotals[i] < 8 && projectTotals[i] > 0 {
+			if projectTotals[i] < 8 && i <= int(tc.ExpectedDays[i]) {
 				ptoTotals[i] = 8 - projectTotals[i]
+				if overage > ptoTotals[i] {
+					overage -= ptoTotals[i]
+					ptoTotals[i] = 0
+				}
 			} else if projectTotals[i] > 8 {
 				// Since we worked over this day, find time to comp back from previous days
-				overage := projectTotals[i] - 8
+				overage += projectTotals[i] - 8
 				for j := range tc.Days {
 					if ptoTotals[j] == 0 {
 						continue
@@ -525,20 +536,21 @@ func main() {
 				}
 			}
 		}
+		// TODO figure out how to not print the PTO line when there's not actually any pto in use
+		var ptoTotal float64
 		// Second, print them
 		fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", "PTO")
-		var ptoTotal float64
 		for i := range tc.Days {
 			day := tc.Payperiod.Start.AddDate(0, 0, i)
 			w := strconv.FormatInt(int64(len(day.Format("Jan 02"))), 10)
 			if ptoTotals[i] > 0 {
-				fmt.Printf(colorRange(8, " %"+w+".2f", ptoTotals[i]), ptoTotals[i])
+				fmt.Printf(colorRange(8.01, " %"+w+".2f", ptoTotals[i]), ptoTotals[i])
 				ptoTotal += ptoTotals[i]
 			} else {
 				fmt.Printf(" %"+w+"s", "")
 			}
 		}
-		fmt.Printf(" %5.2f%s\n", ptoTotal, suffix)
+		fmt.Printf(" %5.2f%s\n", ptoTotal-overage, suffix)
 	}
 	// Show totals
 	fmt.Printf("%-"+strconv.FormatInt(projectsNameLen, 10)+"s", "Total")
