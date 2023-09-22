@@ -134,7 +134,6 @@ func loadConfig() error {
 	}
 
 	if config.HoursInDay == 0 {
-		fmt.Printf("HoursInDay: %+v\n", config.HoursInDay)
 		config.HoursInDay = 8.0
 		err = saveConfig()
 		if err != nil {
