@@ -26,6 +26,7 @@ type Config struct {
 	Clients        map[int64]Client
 	SkipProjects   []string
 	RenameProjects map[string]string
+	HoursInDay     float64
 }
 
 type payperiod struct {
@@ -130,6 +131,15 @@ func loadConfig() error {
 	err = yaml.Unmarshal(c, &config)
 	if err != nil {
 		return err
+	}
+
+	if config.HoursInDay == 0 {
+		fmt.Printf("HoursInDay: %+v\n", config.HoursInDay)
+		config.HoursInDay = 8.0
+		err = saveConfig()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -294,8 +304,8 @@ func calculateTime(now time.Time) (TimeCalculation, error) {
 				log.Field("i", i),
 				log.Field("wd", wd),
 			)
-			payperiodTarget += time.Hour * 8
-			expectedDays[i] = time.Hour * 8
+			payperiodTarget += time.Hour * time.Duration(config.HoursInDay)
+			expectedDays[i] = time.Hour * time.Duration(config.HoursInDay)
 		}
 
 		log.Debug("Entries",
@@ -338,7 +348,7 @@ func calculateTime(now time.Time) (TimeCalculation, error) {
 		}
 	}
 
-	remaining := time.Hour*8 - dayworked
+	remaining := time.Hour*time.Duration(config.HoursInDay) - dayworked
 	payperiodRemaining := payperiodTarget - payperiodDuration
 
 	return TimeCalculation{
@@ -514,15 +524,15 @@ func main() {
 		var overage float64
 		// First, figure out the PTOs
 		for i := range tc.Days {
-			if projectTotals[i] < 8 && i <= int(tc.ExpectedDays[i]) {
-				ptoTotals[i] = 8 - projectTotals[i]
+			if projectTotals[i] < config.HoursInDay && i < int(tc.ExpectedDays[i]) {
+				ptoTotals[i] = config.HoursInDay - projectTotals[i]
 				if overage > ptoTotals[i] {
 					overage -= ptoTotals[i]
 					ptoTotals[i] = 0
 				}
-			} else if projectTotals[i] > 8 {
+			} else if projectTotals[i] > config.HoursInDay {
 				// Since we worked over this day, find time to comp back from previous days
-				overage += projectTotals[i] - 8
+				overage += projectTotals[i] - config.HoursInDay
 				for j := range tc.Days {
 					if ptoTotals[j] == 0 {
 						continue
@@ -544,7 +554,7 @@ func main() {
 			day := tc.Payperiod.Start.AddDate(0, 0, i)
 			w := strconv.FormatInt(int64(len(day.Format("Jan 02"))), 10)
 			if ptoTotals[i] > 0 {
-				fmt.Printf(colorRange(8.01, " %"+w+".2f", ptoTotals[i]), ptoTotals[i])
+				fmt.Printf(colorRange(config.HoursInDay+0.01, " %"+w+".2f", ptoTotals[i]), ptoTotals[i])
 				ptoTotal += ptoTotals[i]
 			} else {
 				fmt.Printf(" %"+w+"s", "")
@@ -561,7 +571,7 @@ func main() {
 		if projectTotals[i] > 0 || ptoTotals[i] > 0 {
 			dayTotal := projectTotals[i] + ptoTotals[i]
 			payperiodTotal += dayTotal
-			fmt.Printf(colorRange(8, " %"+w+".2f", dayTotal), dayTotal)
+			fmt.Printf(colorRange(config.HoursInDay, " %"+w+".2f", dayTotal), dayTotal)
 		} else {
 			fmt.Printf(" %"+w+"s", "")
 		}
