@@ -281,6 +281,11 @@ func calculateTime(now time.Time) (TimeCalculation, error) {
 	}
 
 	payperiodDays := payperiodEnd.YearDay() - payperiodStart.YearDay()
+	// TODO or check if .Year() isn't the same?
+	if payperiodDays < 0 {
+		payperiodDays = payperiodEnd.Add(-24*time.Hour).YearDay() + 1 - payperiodStart.YearDay()
+	}
+	fmt.Println(payperiodStart)
 	var (
 		payperiodDuration time.Duration
 		dayworked         time.Duration
